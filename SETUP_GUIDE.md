@@ -185,6 +185,7 @@ Add these to your Function App settings:
 To implement actual Dataverse updates, modify the `UpdateOrderStatusActivity` function:
 
 ```python
+import os
 import requests
 from azure.identity import ClientSecretCredential
 
@@ -206,18 +207,57 @@ def update_order_status(input_data: dict):
     }
     
     update_data = {
-        "your_status_field": input_data.get('NewStatus'),
-        "your_approval_field": input_data.get('ApprovalResult')
+        "your_status_field": input_data.get('NewStatus'),  # Replace with your Dataverse status column
+        "your_approval_field": input_data.get('ApprovalResult')  # Replace with your approval result column
     }
-    
-    response = requests.patch(
-        f"{dataverse_url}/api/data/v9.2/your_table_name({input_data['OrderID']})",
-        json=update_data,
-        headers=headers
-    )
-    
-    return f"Status updated: {response.status_code}"
+    try:
+        response = requests.patch(
+            f"{dataverse_url}/api/data/v9.2/your_table_name({input_data['OrderID']})",  # Replace with your table name
+            json=update_data,
+            headers=headers
+        )
+        response.raise_for_status()
+        return f"Status updated: {response.status_code}"
+    except Exception as e:
+        return f"Dataverse update failed: {str(e)}"
 ```
+
+### SharePoint Integration
+**Note:** The following is a template for SharePoint integration. You must implement authentication (e.g., with MSAL) to obtain an access token.**
+
+```python
+import requests
+
+def update_sharepoint_status(input_data: dict):
+    # You must implement authentication to get a valid access token (e.g., using MSAL)
+    access_token = "YOUR_ACCESS_TOKEN"
+    site_url = "https://yourtenant.sharepoint.com/sites/yoursite"  # Replace with your site URL
+    list_name = "YourList"  # Replace with your SharePoint list name
+    item_id = input_data["OrderID"]  # Should be the SharePoint item ID
+
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Accept": "application/json;odata=verbose",
+        "Content-Type": "application/json"
+    }
+    update_data = {
+        "__metadata": {"type": "SP.Data.YourListListItem"},  # Replace with your list item type
+        "Status": input_data.get("NewStatus"),
+        "ApprovalResult": input_data.get("ApprovalResult")
+    }
+    try:
+        response = requests.post(
+            f"{site_url}/_api/web/lists/getbytitle('{list_name}')/items({item_id})",
+            headers=headers,
+            json=update_data
+        )
+        response.raise_for_status()
+        return f"SharePoint status updated: {response.status_code}"
+    except Exception as e:
+        return f"SharePoint update failed: {str(e)}"
+```
+- Replace all placeholders with your actual SharePoint site, list, and field names.
+- Implement authentication to obtain a valid access token for SharePoint REST API.
 
 ## Monitoring and Logging
 
