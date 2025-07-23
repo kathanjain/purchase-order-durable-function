@@ -7,18 +7,22 @@ This Azure Durable Function implements an automated Purchase Order approval work
 
 ### Functions Overview
 1. **StartPurchaseOrderWorkflow** (HTTP Trigger) - Entry point for Power Automate
-2. **PurchaseOrderOrchestrator** - Orchestrates the approval workflow
+2. **PurchaseOrderOrchestrator** - Orchestrates the approval workflow, including human-in-the-loop approval
 3. **ValidateOrderActivity** - Validates order data
 4. **ApproveOrderActivity** - Handles approval logic
-5. **UpdateOrderStatusActivity** - (Placeholder for Dataverse integration, not implemented by default)
-6. **HealthCheck** - Health monitoring endpoint
+5. **UpdateStatusAndNotifyActivity** - Updates status to 'Pending Approval' and (mock) sends email to approver
+6. **UpdateOrderStatusActivity** - Updates status in Dataverse/SharePoint after user action
+7. **RaiseApprovalEvent** (HTTP Trigger) - Receives user approval/rejection and raises event to orchestrator
+8. **HealthCheck** - Health monitoring endpoint
 
 ### Workflow Steps
-1. Receive Purchase Order data from Power Automate
+1. Receive Purchase Order data from Power Automate or client
 2. Validate required fields and business rules
 3. Apply approval logic based on order amount
-4. (Optional) Update order status in Dataverse (requires custom implementation)
-5. Return workflow results
+4. Update status to 'Pending Approval' and (mock) send email to approver
+5. Wait for user approval/rejection (external event)
+6. Update order status in Dataverse/SharePoint after user action
+7. Return workflow results
 
 ## Local Development Setup
 
@@ -120,6 +124,14 @@ curl -X POST http://localhost:7072/api/start-po-workflow \
     "Status": "Draft",
     "Amount": 500
   }'
+
+# Simulate user approval event (after getting instanceId from previous response)
+curl -X POST http://localhost:7072/api/raise-approval-event \
+  -H "Content-Type: application/json" \
+  -d '{
+    "instanceId": "TEST001",
+    "action": "Approved"
+  }'
 ```
 
 ### Health Check
@@ -160,6 +172,12 @@ Add these to your Function App settings:
 - `DATAVERSE_CLIENT_ID`: Service principal client ID
 - `DATAVERSE_CLIENT_SECRET`: Service principal secret
 - `DATAVERSE_TENANT_ID`: Azure AD tenant ID
+
+### Human-in-the-Loop Approval (How it works)
+- After validation and approval logic, the orchestrator updates the status to "Pending Approval" and (mock) sends an email to the approver.
+- The orchestrator then waits for an external approval/rejection event.
+- An HTTP endpoint (`/api/raise-approval-event`) allows a UI or email link to send the user's decision.
+- The orchestrator resumes, updates the status in the backend, and completes the workflow.
 
 ### Dataverse Integration
 **Note:** The `UpdateOrderStatusActivity` function is provided as a template for Dataverse integration and is not included in the default codebase.

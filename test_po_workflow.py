@@ -5,6 +5,7 @@ import time
 # Configuration
 FUNCTION_URL = "http://localhost:7072/api/start-po-workflow"  # Update with your deployed function URL
 HEALTH_CHECK_URL = "http://localhost:7072/api/health"
+RAISE_EVENT_URL = "http://localhost:7072/api/raise-approval-event"
 
 def test_health_check():
     """Test the health check endpoint"""
@@ -18,30 +19,37 @@ def test_health_check():
         print(f"Health check failed: {e}")
         return False
 
-def test_purchase_order_workflow(test_data):
-    """Test the purchase order workflow with given data"""
+def test_purchase_order_workflow(test_data, approval_action="Approved"):
+    """Test the purchase order workflow with given data and simulate approval/rejection"""
     print(f"\nTesting Purchase Order Workflow with OrderID: {test_data.get('OrderID')}")
     print(f"Test Data: {json.dumps(test_data, indent=2)}")
-    
     try:
         response = requests.post(
             FUNCTION_URL,
             json=test_data,
             headers={'Content-Type': 'application/json'}
         )
-        
         print(f"Response Status: {response.status_code}")
         print(f"Response Body: {response.text}")
-        
         if response.status_code in [200, 202]:
             response_data = response.json()
             if 'instanceId' in response_data:
-                print(f"Workflow started successfully with Instance ID: {response_data['instanceId']}")
+                instance_id = response_data['instanceId']
+                print(f"Workflow started successfully with Instance ID: {instance_id}")
+                # Simulate user approval/rejection after a short wait
+                print(f"Waiting for 3 seconds before sending approval event...")
+                time.sleep(3)
+                event_payload = {
+                    "instanceId": instance_id,
+                    "action": approval_action  # "Approved" or "Rejected"
+                }
+                event_response = requests.post(RAISE_EVENT_URL, json=event_payload)
+                print(f"Approval Event Response Status: {event_response.status_code}")
+                print(f"Approval Event Response: {event_response.text}")
             return True
         else:
             print(f"Workflow failed to start: {response.text}")
             return False
-            
     except Exception as e:
         print(f"Error testing workflow: {e}")
         return False
@@ -65,7 +73,7 @@ def run_all_tests():
         "Status": "Draft",
         "Amount": 500
     }
-    test_purchase_order_workflow(test_data_1)
+    test_purchase_order_workflow(test_data_1, approval_action="Approved")
     
     # Test 3: Valid Draft Order (Medium Amount - Manager Approval)
     test_data_2 = {
@@ -75,7 +83,7 @@ def run_all_tests():
         "Status": "Draft",
         "Amount": 5000
     }
-    test_purchase_order_workflow(test_data_2)
+    test_purchase_order_workflow(test_data_2, approval_action="Approved")
     
     # Test 4: Valid Draft Order (Large Amount - Executive Approval)
     test_data_3 = {
@@ -85,7 +93,7 @@ def run_all_tests():
         "Status": "Draft",
         "Amount": 25000
     }
-    test_purchase_order_workflow(test_data_3)
+    test_purchase_order_workflow(test_data_3, approval_action="Rejected")
     
     # Test 5: Invalid Order (Missing Details)
     test_data_4 = {
